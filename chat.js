@@ -61,6 +61,10 @@ function setupChatInterface() {
     }
 
     sendButton.addEventListener('click', sendMessage);
+    const cameraButton = document.getElementById('camera-button');
+    cameraButton.addEventListener('click', () => {
+      console.log('Camera button clicked');
+    });
     messageInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         sendMessage();
