@@ -1,77 +1,71 @@
-// Gemini Chat functionality
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-let chatHistory = [];
-
-// Get API key from chrome storage
-let API_KEY;
-
-function setupChatInterface() {
-  chrome.storage.local.get(['geminiApiKey'], function(result) {
-    API_KEY = result.geminiApiKey;
-    if (!API_KEY) {
-      console.error('No Gemini API key found. Please set it in extension options.');
-      document.getElementById('chat-container').textContent = 'Error: Missing API key. Please set your API key in extension options.';
-      document.getElementById('input-container').style.display = 'none';
-      return;
-    }
-
-    const messageInput = document.getElementById('message-input');
-    const sendButton = document.getElementById('send-button');
-    const chatContainer = document.getElementById('chat-container');
-
-    function addMessageToChat(message, isUser) {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-      messageDiv.textContent = message;
-      chatContainer.appendChild(messageDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-
-    async function sendMessage() {
-      const message = messageInput.value.trim();
-      if (!message) return;
-
-      // Add user message to chat
-      addMessageToChat(message, true);
-      chatHistory.push({ role: 'user', parts: [{ text: message }] });
-      messageInput.value = '';
-
-      try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': API_KEY
-          },
-          body: JSON.stringify({
-            contents: chatHistory
-          })
+document.getElementById('camera-button').addEventListener('click', () => {
+  chrome.tabs.captureVisibleTab(null, {}, (image) => {
+    console.log('Screenshot captured', image);
+    if (image) {
+      const messageInput = document.getElementById('message-input').value.trim();
+      let prompt = "You are a helpful AI asistante. Analyze the image and do your best to assume your role to help solve or provide information. If you see a question, answer it. If you see a news article, give your thoughts on it. Determine for yourself if you are suppose to describe what you see or serve as some other helpful purpose";
+      if (messageInput) {
+        prompt = messageInput;
+      }
+      const apiKey = 'AIzaSyAk9eD7dtSOyKX1LhLf6bsZtIr_q7pr3wE'; // Replace with your actual API key
+      fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: 'image/png',
+                  data: image.split(',')[1],
+                },
+              },
+            ],
+          }],
+        }),
+      })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Gemini API response', data);
+          if (data && data.candidates && Array.isArray(data.candidates) && data.candidates.length > 0 && 
+              data.candidates[0] && data.candidates[0].content && 
+              data.candidates[0].content.parts && Array.isArray(data.candidates[0].content.parts) && data.candidates[0].content.parts.length > 0 &&
+              data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
+            const output = data.candidates[0].content.parts[0].text;
+            const chatContainer = document.getElementById('chat-container');
+            const assistantMessage = document.createElement('div');
+            assistantMessage.classList.add('message', 'assistant-message');
+            assistantMessage.textContent = output;
+            chatContainer.appendChild(assistantMessage);
+          } else {
+            console.error('Error: Invalid Gemini API response', data);
+            console.log('Full Gemini API response:', data);
+            const chatContainer = document.getElementById('chat-container');
+            const assistantMessage = document.createElement('div');
+            assistantMessage.classList.add('message', 'assistant-message');
+            assistantMessage.textContent = 'Error: Invalid Gemini API response ' + JSON.stringify(data, null, 2);
+            chatContainer.appendChild(assistantMessage);
+          }
+        })
+        .catch(error => {
+          console.error('Error calling Gemini API', error);
+           console.log('Full Gemini API error:', error);
+           const chatContainer = document.getElementById('chat-container');
+            const assistantMessage = document.createElement('div');
+            assistantMessage.classList.add('message', 'assistant-message');
+            assistantMessage.textContent = 'Error calling Gemini API';
+            chatContainer.appendChild(assistantMessage);
         });
-
-        const data = await response.json();
-        const assistantMessage = data.candidates[0].content.parts[0].text;
-        
-        // Add assistant message to chat
-        addMessageToChat(assistantMessage, false);
-        chatHistory.push({ role: 'model', parts: [{ text: assistantMessage }] });
-      } catch (error) {
-        addMessageToChat('Error: Failed to get response from Gemini', false);
-        console.error('Error:', error);
-      }
+    } else {
+      console.error('Error: Screenshot capture failed.');
+       const chatContainer = document.getElementById('chat-container');
+            const assistantMessage = document.createElement('div');
+            assistantMessage.classList.add('message', 'assistant-message');
+            assistantMessage.textContent = 'Error: Screenshot capture failed.';
+            chatContainer.appendChild(assistantMessage);
     }
-
-    sendButton.addEventListener('click', sendMessage);
-    const cameraButton = document.getElementById('camera-button');
-    cameraButton.addEventListener('click', () => {
-      console.log('Camera button clicked');
-    });
-    messageInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        sendMessage();
-      }
-    });
-  }); // Close chrome.storage.local.get callback
-}
-
-// Initialize the chat interface when the DOM is loaded
-document.addEventListener('DOMContentLoaded', setupChatInterface);
+  });
+});
